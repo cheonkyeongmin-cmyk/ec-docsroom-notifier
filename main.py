@@ -15,7 +15,7 @@ def parse_info(data: dict) -> dict:
     last_update_ms = data.get("lastUpdateDate")
     last_update = (
         datetime.fromtimestamp(last_update_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        if last_update_ms else "알 수 없음"
+        if last_update_ms else "unknown"
     )
 
     excel_links = []
@@ -37,27 +37,28 @@ def parse_info(data: dict) -> dict:
 def send_notification(info: dict):
     if info["excel_links"]:
         link_lines = "\n".join(
-            f"• {item['filename']}\n  {item['url']}"
+            f"- {item['filename']}\n  {item['url']}"
             for item in info["excel_links"]
         )
     else:
-        link_lines = "Excel 링크 없음"
+        link_lines = "No Excel links found"
 
     message = (
-        f"📅 마지막 업데이트: {info['last_update']}\n\n"
-        f"📥 다운로드 링크:\n{link_lines}"
+        f"Last updated: {info['last_update']}\n\n"
+        f"Download:\n{link_lines}"
     )
 
     requests.post(
-        f"https://ntfy.sh/{NTFY_TOPIC}",
-        data=message.encode("utf-8"),
-        headers={
-            "Title": "🇪🇺 EC Docsroom 업데이트 확인",
-            "Priority": "default",
-            "Tags": "eu,document,radio",
+        "https://ntfy.sh",
+        json={
+            "topic": NTFY_TOPIC,
+            "title": "EC Docsroom Update Check",
+            "message": message,
+            "priority": 3,
+            "tags": ["eu", "document"],
         },
     )
-    print("알림 전송 완료")
+    print("Notification sent")
     print(message)
 
 
