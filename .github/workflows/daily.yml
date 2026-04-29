@@ -2,7 +2,7 @@ name: EC Docsroom Daily Notifier
 
 on:
   schedule:
-    - cron: "0 22 * * *"   # 매일 22:00 UTC = 한국시간 07:00 KST
+    - cron: "30 21 * * *"   # 21:30 UTC = 약 07:00 KST (지연 여유 포함)
   workflow_dispatch:        # 수동 실행 버튼 (테스트용)
 
 jobs:
