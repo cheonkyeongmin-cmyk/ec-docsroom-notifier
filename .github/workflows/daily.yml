@@ -1,25 +1,36 @@
-name: EC Docsroom Daily Notifier
+name: EUR-Lex EN 50566 Daily Monitor
 
 on:
   schedule:
-    - cron: "30 21 * * *"   # 21:30 UTC = 약 07:00 KST (지연 여유 포함)
+    - cron: "30 21 * * *"   # 21:30 UTC = 약 07:00 KST
   workflow_dispatch:        # 수동 실행 버튼 (테스트용)
 
 jobs:
-  notify:
+  monitor:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
-
+      
       - name: Python 설치
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
+      
       - name: 의존성 설치
-        run: pip install requests
-
-      - name: 스크립트 실행
+        run: |
+          pip install requests beautifulsoup4 playwright
+          python -m playwright install chromium
+      
+      - name: EUR-Lex 모니터링 실행
         run: python main.py
+      
+      - name: 변경사항 커밋 (캐시 저장)
+        if: always()
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add cache.json || true
+          git commit -m "cache update" || true
+          git push || true
