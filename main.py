@@ -67,9 +67,19 @@ async def fetch_results():
                 await browser.close()
                 return None
 
-            # 검색 입력
+            # 검색 입력 (먼저 클릭해서 활성화)
             print(f"🔍 검색: {SEARCH_QUERY}")
-            await search_input.fill(SEARCH_QUERY)
+            
+            # 요소가 보이도록 스크롤
+            await search_input.scroll_into_view_if_needed()
+            await page.wait_for_timeout(500)
+            
+            # 요소 클릭해서 활성화
+            await search_input.click()
+            await page.wait_for_timeout(500)
+            
+            # 텍스트 입력
+            await search_input.type(SEARCH_QUERY, delay=50)
             await page.wait_for_timeout(1000)
 
             # 검색 실행
