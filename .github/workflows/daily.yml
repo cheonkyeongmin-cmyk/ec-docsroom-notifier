@@ -24,12 +24,3 @@ jobs:
       
       - name: EUR-Lex RSS 모니터링 실행
         run: python main.py
-      
-      - name: 변경사항 커밋 (Git 설정)
-        if: always()
-        run: |
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
-          git add feed.json feed_previous.json || true
-          git commit -m "Update feed cache [skip ci]" || true
-          git push || true
