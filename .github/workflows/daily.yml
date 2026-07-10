@@ -8,26 +8,28 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    container:
-      image: python:3.11-slim
     
     steps:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
       
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      
       - name: 의존성 설치
         run: |
           pip install feedparser requests
-          apt-get update && apt-get install -y git
       
       - name: EUR-Lex RSS 모니터링 실행
         run: python main.py
       
-      - name: 변경사항 커밋 (캐시 저장)
+      - name: 변경사항 커밋 (Git 설정)
         if: always()
         run: |
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-          git add cache.json || true
-          git commit -m "cache update" || true
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          git add feed.json feed_previous.json || true
+          git commit -m "Update feed cache [skip ci]" || true
           git push || true
