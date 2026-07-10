@@ -162,11 +162,11 @@ def main():
     old_results = load_cache()
     has_changes, change_msg = detect_changes(old_results, new_results)
 
-    print(f"📋 {change_msg}\n")
-
     if has_changes:
         # 캐시 업데이트
         save_cache(new_results)
+
+        print(f"📋 {change_msg}\n")
 
         # 알림 전송
         message = (
@@ -182,7 +182,7 @@ def main():
         print(message)
         print("=" * 60)
     else:
-        print("(알림 미전송)")
+        print(f"✅ No update")
 
 
 if __name__ == "__main__":
