@@ -34,26 +34,100 @@ async def fetch_results():
             page = await browser.new_page()
 
             print(f"📍 페이지 로딩 중...")
-            await page.goto(EUR_LEX_URL, wait_until="networkidle", timeout=30000)
+            await page.goto(EUR_LEX_URL, wait_until="domcontentloaded", timeout=60000)
+            
+            # 페이지가 완전히 로드될 때까지 대기
+            await page.wait_for_timeout(3000)
+
+            # 검색 입력 필드 찾기 (다양한 선택자 시도)
+            search_selectors = [
+                'input[type="text"]',
+                'input[id*="search"]',
+                'input[placeholder*="search" i]',
+                'input[name*="search"]',
+                '#search-input',
+                '.search-input input',
+            ]
+            
+            search_input = None
+            for selector in search_selectors:
+                try:
+                    search_input = await page.query_selector(selector)
+                    if search_input:
+                        print(f"✓ 검색 입력 필드 찾음: {selector}")
+                        break
+                except:
+                    continue
+            
+            if not search_input:
+                print("⚠️ 검색 입력 필드를 찾을 수 없음. 페이지 HTML 확인 중...")
+                html = await page.content()
+                if "search" in html.lower():
+                    print("💡 'search' 관련 요소가 있지만 선택자를 찾지 못함")
+                await browser.close()
+                return None
 
             # 검색 입력
             print(f"🔍 검색: {SEARCH_QUERY}")
-            await page.fill('input[type="text"]', SEARCH_QUERY)
+            await search_input.fill(SEARCH_QUERY)
+            await page.wait_for_timeout(1000)
 
             # 검색 실행
-            search_button = await page.query_selector('button[type="submit"]')
+            search_button = None
+            button_selectors = [
+                'button[type="submit"]',
+                'button[id*="search"]',
+                '.search-button',
+                'button:has-text("Search")',
+                'button:has-text("search")',
+            ]
+            
+            for selector in button_selectors:
+                try:
+                    search_button = await page.query_selector(selector)
+                    if search_button:
+                        print(f"✓ 검색 버튼 찾음: {selector}")
+                        break
+                except:
+                    continue
+            
             if search_button:
                 await search_button.click()
-                await page.wait_for_load_state("networkidle", timeout=30000)
+                await page.wait_for_load_state("networkidle", timeout=60000)
+            else:
+                # 버튼이 없으면 Enter 키로 검색
+                print("💡 Enter 키로 검색 실행")
+                await search_input.press("Enter")
+                await page.wait_for_load_state("networkidle", timeout=60000)
 
             # 정렬 (있으면)
-            sort_select = await page.query_selector('select[name*="sort"], select[id*="sort"]')
-            if sort_select:
-                print(f"📊 날짜순 정렬 중...")
-                await page.select_option('select[name*="sort"], select[id*="sort"]', "date")
-                await page.wait_for_load_state("networkidle", timeout=30000)
+            sort_selectors = [
+                'select[name*="sort"]',
+                'select[id*="sort"]',
+                'select[name*="order"]',
+                '.sort-select',
+            ]
+            
+            for selector in sort_selectors:
+                try:
+                    sort_select = await page.query_selector(selector)
+                    if sort_select:
+                        print(f"📊 날짜순 정렬 중...")
+                        await sort_select.select_option("date")
+                        await page.wait_for_timeout(2000)
+                        break
+                except:
+                    continue
 
             content = await page.content()
+            
+            # 디버깅: 스크린샷 저장 (선택사항)
+            try:
+                await page.screenshot(path="debug_screenshot.png")
+                print("📸 디버그 스크린샷 저장: debug_screenshot.png")
+            except:
+                pass
+            
             await browser.close()
 
             # 결과 파싱
@@ -95,6 +169,11 @@ async def fetch_results():
 
     except Exception as e:
         print(f"❌ 오류: {e}")
+        print("💡 해결 방법:")
+        print("  1. EUR-Lex 웹사이트를 직접 방문해서 구조 확인")
+        print("  2. 브라우저 검사도구로 검색 입력 필드의 id/name 확인")
+        print("  3. main.py의 search_selectors 리스트에 해당 선택자 추가")
+        print("  4. 디버그 스크린샷 확인: debug_screenshot.png")
         return None
 
 
