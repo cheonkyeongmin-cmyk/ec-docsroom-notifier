@@ -8,20 +8,18 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    container:
+      image: python:3.11-slim
     
     steps:
       - name: 코드 체크아웃
-        uses: actions/checkout@v4.2.2
-      
-      - name: Python 설치
-        uses: actions/setup-python@v5.3.0
-        with:
-          python-version: "3.11"
+        uses: actions/checkout@v4
       
       - name: 의존성 설치
         run: |
           pip install requests beautifulsoup4 playwright
           python -m playwright install chromium
+          apt-get update && apt-get install -y git
       
       - name: EUR-Lex 모니터링 실행
         run: python main.py
@@ -29,8 +27,8 @@ jobs:
       - name: 변경사항 커밋 (캐시 저장)
         if: always()
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
           git add cache.json || true
           git commit -m "cache update" || true
           git push || true
