@@ -59,6 +59,7 @@ def fetch_feed():
                 print(f"  ⚠️ 항목 파싱 오류: {e}")
                 continue
         
+        print(f"  ✓ {len(results)}개 항목 파싱 완료")
         return results
     
     except Exception as e:
@@ -71,10 +72,15 @@ def load_previous_feed():
     if PREVIOUS_FILE.exists():
         try:
             with open(PREVIOUS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
+                data = json.load(f)
+                print(f"  ✓ feed_previous.json 로드 완료 ({len(data)}개 항목)")
+                return data
+        except Exception as e:
+            print(f"  ⚠️ feed_previous.json 읽기 오류: {e}")
             return None
-    return None
+    else:
+        print(f"  ℹ️ feed_previous.json 없음 (첫 실행)")
+        return None
 
 
 def save_current_feed(results):
@@ -82,8 +88,11 @@ def save_current_feed(results):
     try:
         with open(FEED_FILE, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
+        print(f"  ✓ feed.json 저장 완료 ({len(results)}개 항목)")
+        return True
     except Exception as e:
-        print(f"❌ feed.json 저장 오류: {e}")
+        print(f"  ❌ feed.json 저장 오류: {e}")
+        return False
 
 
 def backup_to_previous():
@@ -94,8 +103,13 @@ def backup_to_previous():
                 data = json.load(f)
             with open(PREVIOUS_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"  ✓ feed_previous.json 백업 완료")
+            return True
     except Exception as e:
         print(f"  ⚠️ 백업 오류: {e}")
+        return False
+    
+    return False
 
 
 def detect_changes(previous_results, current_results):
@@ -158,9 +172,9 @@ def send_notification(title, message):
             },
             timeout=10,
         )
-        print("✅ 알림 전송 완료")
+        print("  ✅ 알림 전송 완료")
     except Exception as e:
-        print(f"❌ 알림 전송 실패: {e}")
+        print(f"  ❌ 알림 전송 실패: {e}")
 
 
 def format_items(items, title):
@@ -185,22 +199,27 @@ def main():
     print(f"⏰ [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}] 시작\n")
 
     # RSS 피드 읽기
+    print("1️⃣ RSS 피드 다운로드...")
     current_results = fetch_feed()
 
     if current_results is None:
         print("❌ RSS 피드 읽기 실패")
         return
 
-    print(f"✅ {len(current_results)}개 항목 획득\n")
+    print(f"\n✅ {len(current_results)}개 항목 획득\n")
 
     # 이전 버전 로드 및 비교
+    print("2️⃣ 이전 데이터 로드...")
     previous_results = load_previous_feed()
+    
+    print("\n3️⃣ 변경사항 비교...")
     has_changes, change_msg, added, removed, updated = detect_changes(previous_results, current_results)
 
     if has_changes:
         print(f"📋 {change_msg}\n")
 
         # 알림 전송
+        print("4️⃣ 알림 전송...")
         message = (
             f"⏰ {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n"
             f"🔗 EUR-Lex EN 50566\n\n"
@@ -212,17 +231,22 @@ def main():
 
         send_notification(f"🔔 EN 50566 업데이트", message)
 
-        print("=" * 60)
+        print("\n" + "=" * 60)
         print(message)
         print("=" * 60)
     else:
+        print(f"📋 {change_msg}\n")
         print(f"✅ No update")
 
     # 현재 결과를 파일에 저장 (다음 실행을 위한 비교용)
-    print(f"\n💾 결과 저장 중...")
+    print(f"\n5️⃣ 파일 저장...")
     backup_to_previous()  # 이전 파일 백업
     save_current_feed(current_results)  # 현재 결과 저장
-    print(f"✓ feed.json 업데이트 완료")
+
+    print(f"\n✨ 완료!")
+    print(f"📁 작업 디렉토리: {Path.cwd()}")
+    print(f"📄 feed.json: {FEED_FILE.exists()}")
+    print(f"📄 feed_previous.json: {PREVIOUS_FILE.exists()}")
 
 
 if __name__ == "__main__":
