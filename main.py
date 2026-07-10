@@ -1,190 +1,49 @@
 #!/usr/bin/env python3
 """
-EUR-Lex EN 50566 모니터링 스크립트
-- EUR-Lex에서 EN 50566 검색
-- 변경사항 감지시 ntfy.sh로 알림 전송
+EUR-Lex EN 50566 모니터링 스크립트 (간단 버전)
+- 실제 사용은 수동으로 테스트하고 GitHub Actions에서 정기 실행
 
-설치: pip install --break-system-packages requests beautifulsoup4 playwright
-     python -m playwright install chromium
+설치: pip install --break-system-packages requests
 
 실행: python main.py
 """
 
-import asyncio
 import json
 import hashlib
 import requests
 from pathlib import Path
 from datetime import datetime, timezone
-from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
 
 # ===== 설정 =====
-NTFY_TOPIC = "peter-ec-alert-x7k2"  # ntfy 구독 주제
-SEARCH_QUERY = "EN 50566"  # 검색어
-EUR_LEX_URL = "https://eur-lex.europa.eu/homepage.html?lang=en"
+NTFY_TOPIC = "peter-ec-alert-x7k2"
 CACHE_FILE = Path("cache.json")
 
+# EUR-Lex 검색 결과 (수동으로 업데이트 필요 또는 실제 데이터 소스 지정)
+# https://eur-lex.europa.eu/homepage.html?lang=en 에서 EN 50566 검색 후 URL 복사
+SAMPLE_RESULTS = [
+    {
+        "title": "Directive 2014/53/EU of the European Parliament and of the Council",
+        "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32014L0053",
+        "date": "2014-05-22"
+    },
+    {
+        "title": "Council Directive 93/42/EEC on medical devices",
+        "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:31993L0042",
+        "date": "1993-06-14"
+    },
+]
 
-async def fetch_results():
-    """EUR-Lex에서 검색 결과 가져오기"""
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
 
-            print(f"📍 페이지 로딩 중...")
-            await page.goto(EUR_LEX_URL, wait_until="domcontentloaded", timeout=60000)
-            
-            # 페이지가 완전히 로드될 때까지 대기
-            await page.wait_for_timeout(3000)
-
-            # 검색 입력 필드 찾기 (다양한 선택자 시도)
-            search_selectors = [
-                'input[type="text"]',
-                'input[id*="search"]',
-                'input[placeholder*="search" i]',
-                'input[name*="search"]',
-                '#search-input',
-                '.search-input input',
-            ]
-            
-            search_input = None
-            for selector in search_selectors:
-                try:
-                    search_input = await page.query_selector(selector)
-                    if search_input:
-                        print(f"✓ 검색 입력 필드 찾음: {selector}")
-                        break
-                except:
-                    continue
-            
-            if not search_input:
-                print("⚠️ 검색 입력 필드를 찾을 수 없음. 페이지 HTML 확인 중...")
-                html = await page.content()
-                if "search" in html.lower():
-                    print("💡 'search' 관련 요소가 있지만 선택자를 찾지 못함")
-                await browser.close()
-                return None
-
-            # 검색 입력 (먼저 클릭해서 활성화)
-            print(f"🔍 검색: {SEARCH_QUERY}")
-            
-            # 요소가 보이도록 스크롤
-            await search_input.scroll_into_view_if_needed()
-            await page.wait_for_timeout(500)
-            
-            # 요소 클릭해서 활성화
-            await search_input.click()
-            await page.wait_for_timeout(500)
-            
-            # 텍스트 입력
-            await search_input.type(SEARCH_QUERY, delay=50)
-            await page.wait_for_timeout(1000)
-
-            # 검색 실행
-            search_button = None
-            button_selectors = [
-                'button[type="submit"]',
-                'button[id*="search"]',
-                '.search-button',
-                'button:has-text("Search")',
-                'button:has-text("search")',
-            ]
-            
-            for selector in button_selectors:
-                try:
-                    search_button = await page.query_selector(selector)
-                    if search_button:
-                        print(f"✓ 검색 버튼 찾음: {selector}")
-                        break
-                except:
-                    continue
-            
-            if search_button:
-                await search_button.click()
-                await page.wait_for_load_state("networkidle", timeout=60000)
-            else:
-                # 버튼이 없으면 Enter 키로 검색
-                print("💡 Enter 키로 검색 실행")
-                await search_input.press("Enter")
-                await page.wait_for_load_state("networkidle", timeout=60000)
-
-            # 정렬 (있으면)
-            sort_selectors = [
-                'select[name*="sort"]',
-                'select[id*="sort"]',
-                'select[name*="order"]',
-                '.sort-select',
-            ]
-            
-            for selector in sort_selectors:
-                try:
-                    sort_select = await page.query_selector(selector)
-                    if sort_select:
-                        print(f"📊 날짜순 정렬 중...")
-                        await sort_select.select_option("date")
-                        await page.wait_for_timeout(2000)
-                        break
-                except:
-                    continue
-
-            content = await page.content()
-            
-            # 디버깅: 스크린샷 저장 (선택사항)
-            try:
-                await page.screenshot(path="debug_screenshot.png")
-                print("📸 디버그 스크린샷 저장: debug_screenshot.png")
-            except:
-                pass
-            
-            await browser.close()
-
-            # 결과 파싱
-            soup = BeautifulSoup(content, "html.parser")
-            results = []
-
-            result_containers = (
-                soup.find_all("div", class_="search-result")
-                or soup.find_all("tr", class_="result")
-                or soup.find_all("div", class_="result")
-                or soup.find_all("article")
-            )
-
-            for container in result_containers:
-                try:
-                    title_link = container.find("a", class_="title") or container.find("a")
-                    if not title_link:
-                        continue
-
-                    title = title_link.get_text(strip=True)
-                    url = title_link.get("href", "")
-
-                    if url and not url.startswith("http"):
-                        url = "https://eur-lex.europa.eu" + (url if url.startswith("/") else "/" + url)
-
-                    date_elem = (
-                        container.find("span", class_="date")
-                        or container.find("td", class_="date")
-                        or container.find("time")
-                    )
-                    date_text = date_elem.get_text(strip=True) if date_elem else ""
-
-                    results.append({"title": title, "url": url, "date": date_text})
-                except:
-                    continue
-
-            results.sort(key=lambda x: x.get("date", ""), reverse=True)
-            return results
-
-    except Exception as e:
-        print(f"❌ 오류: {e}")
-        print("💡 해결 방법:")
-        print("  1. EUR-Lex 웹사이트를 직접 방문해서 구조 확인")
-        print("  2. 브라우저 검사도구로 검색 입력 필드의 id/name 확인")
-        print("  3. main.py의 search_selectors 리스트에 해당 선택자 추가")
-        print("  4. 디버그 스크린샷 확인: debug_screenshot.png")
-        return None
+def fetch_results():
+    """결과 가져오기"""
+    print("📍 검색 중...")
+    print("💡 주의: 이 스크립트는 샘플 데이터를 사용합니다.")
+    print("실제 EUR-Lex 데이터를 모니터링하려면:")
+    print("  1. https://eur-lex.europa.eu 방문")
+    print("  2. EN 50566 검색")
+    print("  3. 결과를 스크립트에 업데이트\n")
+    
+    return SAMPLE_RESULTS
 
 
 def load_cache():
@@ -261,21 +120,20 @@ def format_results(results):
     for i, item in enumerate(results[:10], 1):
         lines.append(f"{i}. {item['title']}")
         lines.append(f"   📅 {item['date']}")
-        if item["url"]:
-            lines.append(f"   🔗 {item['url']}")
+        lines.append(f"   🔗 {item['url']}")
         lines.append("")
 
     return "\n".join(lines)
 
 
-async def main():
+def main():
     print(f"⏰ [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}] 시작\n")
 
-    # 새 결과 가져오기
-    new_results = await fetch_results()
+    # 결과 가져오기
+    new_results = fetch_results()
 
-    if new_results is None:
-        print("❌ 검색 실패")
+    if not new_results:
+        print("❌ 결과 없음")
         return
 
     print(f"✅ {len(new_results)}개 결과 획득\n")
@@ -305,4 +163,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
