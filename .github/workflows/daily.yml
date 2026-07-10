@@ -1,8 +1,8 @@
-name: EUR-Lex EN 50566 Daily Monitor
+name: EUR-Lex EN 50566 RSS Monitor
 
 on:
   schedule:
-    - cron: "30 21 * * *"   # 21:30 UTC = 약 07:00 KST
+    - cron: "30 21 * * *"   # 매일 21:30 UTC = 약 07:00 KST
   workflow_dispatch:        # 수동 실행 버튼 (테스트용)
 
 jobs:
@@ -17,11 +17,10 @@ jobs:
       
       - name: 의존성 설치
         run: |
-          pip install requests beautifulsoup4 playwright
-          python -m playwright install chromium
+          pip install feedparser requests
           apt-get update && apt-get install -y git
       
-      - name: EUR-Lex 모니터링 실행
+      - name: EUR-Lex RSS 모니터링 실행
         run: python main.py
       
       - name: 변경사항 커밋 (캐시 저장)
